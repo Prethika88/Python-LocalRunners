@@ -5,12 +5,16 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   test-and-build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout Python application
         uses: actions/checkout@v4
 
       - name: Show project files
@@ -22,10 +26,49 @@ jobs:
         run: |
           python3 -m py_compile app.py
 
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build Docker image
         run: |
-          docker build -t python-app:v1 .
+          docker build \
+            -t ghcr.io/${{ github.repository_owner }}/python-localrunners:${{ github.sha }} .
 
-      - name: Verify Docker image
+      - name: Push Docker image
         run: |
-          docker images python-app
+          docker push \
+            ghcr.io/${{ github.repository_owner }}/python-localrunners:${{ github.sha }}
+
+      - name: Checkout Kubernetes repository
+        uses: actions/checkout@v4
+        with:
+          repository: Prethika88/Kubernates
+          token: ${{ secrets.KUBERNETES_REPO_TOKEN }}
+          path: kubernates
+
+      - name: Update Kubernetes image
+        run: |
+          sed -i \
+            "s|image: .*|image: ghcr.io/${{ github.repository_owner }}/python-localrunners:${{ github.sha }}|" \
+            kubernates/k8s/deployment.yaml
+
+      - name: Show updated Kubernetes deployment
+        run: |
+          cat kubernates/k8s/deployment.yaml
+
+      - name: Push Kubernetes update
+        run: |
+          cd kubernates
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add k8s/deployment.yaml
+
+          git commit -m "Update Python app image to ${{ github.sha }}" || echo "No changes to commit"
+
+          git push origin main
