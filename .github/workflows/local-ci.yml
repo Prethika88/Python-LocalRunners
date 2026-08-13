@@ -24,7 +24,7 @@ jobs:
 
       - name: Build Docker image
         run: |
-          docker build -t python-app:test .
+          docker build -t python-app:v1 .
 
       - name: Verify Docker image
         run: |
